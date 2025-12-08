@@ -1,0 +1,48 @@
+# ------------------------
+# Node / Next.js frontend
+# ------------------------
+frontend/node_modules/
+frontend/.next/
+frontend/.env
+frontend/.env.local
+frontend/.env.development
+frontend/.env.production
+frontend/dist/
+frontend/out/
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/package-lock.json
+frontend/yarn.lock
+
+# ------------------------
+# Python / FastAPI backend (python-rag)
+# ------------------------
+python-rag/__pycache__/
+python-rag/*.py[cod]
+python-rag/.env
+python-rag/venv/
+python-rag/.venv/
+python-rag/env/
+python-rag/*.sqlite3
+python-rag/*.db
+python-rag/*.log
+python-rag/.mypy_cache/
+python-rag/.pytest_cache/
+python-rag/.coverage
+
+# ------------------------
+# General
+# ------------------------
+.DS_Store
+*.swp
+.idea/
+.vscode/
+*.egg-info/
+*.pyc
+*.pyo
+
+# ------------------------
+# Chroma DB local storage (ignore local DB files)
+# ------------------------
+python-rag/chroma_db/
