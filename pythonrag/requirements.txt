@@ -2,11 +2,11 @@ fastapi
 uvicorn[standard]
 python-multipart
 langchain
+langchain-text-splitters
 langchain_huggingface
 sentence-transformers
 langchain-community
 google-generativeai
 pypdf
 faiss-cpu
-pinecone-client
 python-dotenv
