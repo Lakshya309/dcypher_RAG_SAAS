@@ -5,10 +5,13 @@ import { useDropzone } from 'react-dropzone';
 import { motion, AnimatePresence } from 'framer-motion';
 import { UploadCloud, FileText, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useSession } from '@/context/ClientSessionProvider';
 
 const FileUploadCard = ({ onSuccess }: { onSuccess: () => void }) => {
   const [files, setFiles] = useState<File[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const { sessionId } = useSession();
+  const baseURL = process.env.NEXT_PUBLIC_API_URL
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     setFiles(prev => [...prev, ...acceptedFiles]);
@@ -21,7 +24,8 @@ const FileUploadCard = ({ onSuccess }: { onSuccess: () => void }) => {
   };
 
   const handleUpload = async () => {
-    if (files.length === 0) return;
+    if (files.length === 0 || !sessionId) return;
+
 
     setIsUploading(true);
     
@@ -29,8 +33,9 @@ const FileUploadCard = ({ onSuccess }: { onSuccess: () => void }) => {
       for (const file of files) {
         const formData = new FormData();
         formData.append('file', file);
+        formData.append('session_id', sessionId);
 
-        const response = await fetch('http://127.0.0.1:8080/api/upload', {
+        const response = await fetch(`${baseURL}/api/upload`, {
           method: 'POST',
           body: formData,
         });

@@ -1,37 +1,50 @@
 import os
+from fastapi import HTTPException
 from app.utils.pdf_loader import load_pdf
 from app.utils.splitter import split_docs
-from app.utils.vector_store import get_vectorstore, add_to_vectorstore, query_vectorstore
+from app.utils.vector_store import add_to_vectorstore, query_vectorstore, delete_vectorstore
 from app.utils.llm import get_llm
 
-DATA_DIR = "data/vectorstore"
+async def process_pdf(file, session_id: str):
+    if not session_id:
+        raise HTTPException(status_code=400, detail="Session ID is required.")
+    
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="File is empty.")
 
-async def process_pdf(file):
-    # Save file
-    path = f"data/{file.filename}"
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="File name not found.")
+
+    path = f"data/{session_id}_{file.filename}"
     with open(path, "wb") as f:
-        f.write(await file.read())
+        f.write(content)
 
-    # Load
-    docs = load_pdf(path)
-
-    # Split
-    chunks = split_docs(docs)
-
-    # Add to vectorstore
-    add_to_vectorstore(chunks)
+    try:
+        docs = load_pdf(path)
+        chunks = split_docs(docs)
+        add_to_vectorstore(chunks, session_id)
+    finally:
+        if os.path.exists(path):
+            os.remove(path)
 
     return {"message": "PDF processed", "chunks": len(chunks)}
 
+async def answer_query(query: str, session_id: str):
+    if not session_id:
+        raise HTTPException(status_code=400, detail="Session ID is required.")
+    if not query:
+        raise HTTPException(status_code=400, detail="Query is empty.")
 
-async def answer_query(query: str):
-    retriever = query_vectorstore(query)
+    retriever = query_vectorstore(query, session_id)
+    if not retriever:
+        return "No documents have been uploaded for this session. Please upload a PDF first.", []
+
     llm = get_llm()
-
     context = "\n\n".join([d.page_content for d in retriever])
 
     prompt = f"""
-    You must rewrite and optimize any text I give you. Follow these rules strictly. Do not use formatting such as bold, italics, headings, bullet points, special characters or emojis. Output plain text only. The rewritten text must be concise, grammatically correct and maintain the original meaning. If the text contains errors, fix them. If it contains slang or informal tone, preserve it only when essential to context. If the input is too long, summarize it while retaining all key information. If the input is short, expand it only when needed for clarity. Always ensure the output is safe, coherent and free of hallucinations. If the input contains incomplete sentences, reconstruct them logically. If the input contains sensitive, harmful, or private content, remove or neutralize it. Always handle edge cases like empty input, repeated text, mixed languages, broken grammar, or irrelevant content by producing the clearest valid version possible. If the input already looks correct, return a polished version without unnecessary changes.
+    You are a helpful AI assistant for the RAG an open source PDF-GPT. You will answer user questions based on the context provided.
 
     CONTEXT:
     {context}
@@ -44,3 +57,9 @@ async def answer_query(query: str):
 
     answer = llm.invoke(prompt)
     return answer, [d.metadata for d in retriever]
+
+async def reset_session(session_id: str):
+    if not session_id:
+        raise HTTPException(status_code=400, detail="Session ID is required.")
+    delete_vectorstore(session_id)
+    return {"message": f"Session {session_id} has been reset."}

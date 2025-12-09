@@ -10,7 +10,7 @@ app.add_middleware(
     allow_origins=["*"],  # Allows all origins
     allow_credentials=True,
     allow_methods=["*"],  # Allows all methods
-    allow_headers=["*"],  # Allows all headers
+    allow_headers=["*"],  # Allows all header
 )
 
 # app.include_router(health.router, prefix="/health", tags=["health"])

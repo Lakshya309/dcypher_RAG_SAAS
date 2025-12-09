@@ -3,9 +3,10 @@ import React, { useState, useRef, useEffect } from 'react';
 import ChatBubble from '@/components/shared/ChatBubble';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Send } from 'lucide-react';
+import { Send, RotateCcw } from 'lucide-react';
 import FileUploadCard from '@/components/shared/FileUploadCard';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useSession } from '@/context/ClientSessionProvider';
 
 type Message = {
   role: 'user' | 'assistant';
@@ -22,6 +23,8 @@ const ChatPage = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [view, setView] = useState<View>('upload');
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const baseURL = process.env.NEXT_PUBLIC_API_URL;
+  const { sessionId, resetSession } = useSession();
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -31,7 +34,7 @@ const ChatPage = () => {
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputValue.trim()) return;
+    if (!inputValue.trim() || !sessionId) return;
 
     const userMessage: Message = { role: 'user', content: inputValue };
     setMessages(prev => [...prev, userMessage]);
@@ -42,8 +45,9 @@ const ChatPage = () => {
     try {
       const formData = new URLSearchParams();
       formData.append('query', currentQuery);
+      formData.append('session_id', sessionId);
 
-      const response = await fetch('http://127.0.0.1:8080/api/chat', {
+      const response = await fetch(`${baseURL}/api/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
@@ -72,6 +76,14 @@ const ChatPage = () => {
     setView('chat');
   };
 
+  const handleReset = () => {
+    resetSession();
+    setMessages([
+      { role: 'assistant', content: "Session has been reset. Please upload new documents." }
+    ]);
+    setView('upload');
+  };
+
   const pageVariants = {
     initial: { opacity: 0, x: '-100vw' },
     in: { opacity: 1, x: 0 },
@@ -85,7 +97,6 @@ const ChatPage = () => {
   };
 
   return (
-    // CHANGE 1: Ensure the outer container has a strict height constraint relative to the screen
     <div className="container mx-auto max-w-8xl h-[calc(100vh-120px)] flex flex-col py-4 overflow-hidden">
       <AnimatePresence mode="wait">
         {view === 'upload' && (
@@ -96,7 +107,7 @@ const ChatPage = () => {
             exit="out"
             variants={pageVariants}
             transition={pageTransition}
-            className="h-full flex flex-col justify-center" // Center upload card vertically
+            className="h-full flex flex-col justify-center"
           >
             <div className="text-center mb-12">
               <h1 className="font-sans text-4xl font-bold tracking-tighter">Manage Your Knowledge Base</h1>
@@ -116,10 +127,8 @@ const ChatPage = () => {
             exit="out"
             variants={pageVariants}
             transition={pageTransition}
-            // CHANGE 2: Add 'h-full' to force the motion div to respect parent height
             className="flex flex-col h-full"
           >
-            {/* CHANGE 3: Add 'min-h-0' here. This is the magic fix that enables scrolling inside flex items */}
             <div className="flex-1 overflow-y-auto pr-4 min-h-0">
               {messages.map((msg, index) => (
                 <ChatBubble key={index} message={msg} />
@@ -129,6 +138,14 @@ const ChatPage = () => {
             </div>
 
             <form onSubmit={handleSendMessage} className="mt-4 flex items-center gap-2 pt-2 border-t bg-background z-10">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleReset}
+                className="rounded-full w-10 h-10 p-2"
+              >
+                <RotateCcw className="h-5 w-5" />
+              </Button>
               <Input
                 type="text"
                 placeholder="Type your message..."
