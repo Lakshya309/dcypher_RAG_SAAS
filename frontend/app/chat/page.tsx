@@ -1,14 +1,15 @@
 "use client";
-import React, { useState, useRef, useEffect, } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import ChatBubble from '@/components/shared/ChatBubble';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Send, RotateCcw } from 'lucide-react';
+import { Send, RotateCcw, Paperclip } from 'lucide-react';
 import FileUploadCard from '@/components/shared/FileUploadCard';
 import { motion, AnimatePresence } from 'framer-motion';
 import { fetchWithSession } from '@/lib/api';
 import { useSession } from '@/context/ClientSessionProvider';
-
+import PixelLoader from '@/components/shared/PixelLoader';
+import { uploadPdfToSupabase } from '@/lib/supabase';
 
 type Message = {
   role: 'user' | 'assistant';
@@ -23,10 +24,13 @@ const ChatPage = () => {
   ]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [view, setView] = useState<View>('upload');
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const baseURL = process.env.NEXT_PUBLIC_API_URL;
-  const { resetSession } = useSession();
+  const { sessionId, resetSession } = useSession();
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -85,6 +89,54 @@ const ChatPage = () => {
     setView('upload');
   };
 
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    setUploadError(null);
+
+    try {
+      // First, upload to Supabase
+      const publicUrl = await uploadPdfToSupabase(file, sessionId!);
+      setMessages(prev => [
+        ...prev,
+        { role: 'assistant', content: `Successfully uploaded ${file.name} to storage. Now processing...` }
+      ]);
+
+      // Then, send the URL to the backend for processing
+      const response = await fetchWithSession(`${baseURL}/api/upload`, {
+        method: 'POST',
+        body: JSON.stringify({ session_id: sessionId, file_url: publicUrl }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to process PDF on the backend.');
+      }
+
+      const result = await response.json();
+      setMessages(prev => [
+        ...prev,
+        { role: 'assistant', content: `PDF processed successfully. ${result.chunks} chunks created.` }
+      ]);
+
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred during upload.';
+      setUploadError(errorMessage);
+      setMessages(prev => [
+        ...prev,
+        { role: 'assistant', content: `An error occurred: ${errorMessage}` }
+      ]);
+    } finally {
+      setIsUploading(false);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
   const pageVariants = {
     initial: { opacity: 0, x: '-100vw' },
     in: { opacity: 1, x: 0 },
@@ -99,6 +151,7 @@ const ChatPage = () => {
 
   return (
     <div className="container mx-auto max-w-8xl h-[calc(100vh-120px)] flex flex-col py-4 overflow-hidden">
+      <PixelLoader isLoading={isUploading} text="UPLOADING PDF..." />
       <AnimatePresence mode="wait">
         {view === 'upload' && (
           <motion.div
@@ -135,6 +188,7 @@ const ChatPage = () => {
                 <ChatBubble key={index} message={msg} />
               ))}
               {isLoading && <ChatBubble message={{ role: 'assistant', content: '...' }} />}
+              {uploadError && <p className="text-red-500 text-sm text-center mt-2">{uploadError}</p>}
               <div ref={messagesEndRef} />
             </div>
 
@@ -147,6 +201,23 @@ const ChatPage = () => {
               >
                 <RotateCcw className="h-5 w-5" />
               </Button>
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                className="hidden"
+                accept="application/pdf"
+                disabled={isUploading}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => fileInputRef.current?.click()}
+                className="rounded-full w-10 h-10 p-2"
+                disabled={isUploading}
+              >
+                <Paperclip className="h-5 w-5" />
+              </Button>
               <Input
                 type="text"
                 placeholder="Type your message..."
@@ -154,12 +225,12 @@ const ChatPage = () => {
                 onChange={(e) => setInputValue(e.target.value)}
                 className="flex-1 rounded-full"
                 style={{ fontFamily: 'var(--font-geist-sans)' }}
-                disabled={isLoading}
+                disabled={isLoading || isUploading}
               />
               <Button
                 type="submit"
                 className="rounded-full w-10 h-10 p-2"
-                disabled={isLoading}
+                disabled={isLoading || isUploading}
               >
                 <Send className="h-5 w-5" />
               </Button>

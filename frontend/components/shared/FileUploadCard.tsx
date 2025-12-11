@@ -6,6 +6,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { UploadCloud, FileText, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useSession } from '@/context/ClientSessionProvider';
+import { uploadPdfToSupabase } from '@/lib/supabase';
+import PixelLoader from './PixelLoader';
+import { fetchWithSession } from '@/lib/api';
 
 const FileUploadCard = ({ onSuccess }: { onSuccess: () => void }) => {
   const [files, setFiles] = useState<File[]>([]);
@@ -14,10 +17,15 @@ const FileUploadCard = ({ onSuccess }: { onSuccess: () => void }) => {
   const baseURL = process.env.NEXT_PUBLIC_API_URL
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
-    setFiles(prev => [...prev, ...acceptedFiles]);
+    // We only want to handle one file at a time as per the new flow
+    setFiles([acceptedFiles[0]]);
   }, []);
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({ onDrop });
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    accept: { 'application/pdf': ['.pdf'] },
+    multiple: false,
+  });
 
   const removeFile = (fileName: string) => {
     setFiles(prev => prev.filter(f => f.name !== fileName));
@@ -26,30 +34,26 @@ const FileUploadCard = ({ onSuccess }: { onSuccess: () => void }) => {
   const handleUpload = async () => {
     if (files.length === 0 || !sessionId) return;
 
-
     setIsUploading(true);
-    
+    const file = files[0];
+
     try {
-      for (const file of files) {
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('session_id', sessionId);
+      // 1. Upload to Supabase
+      const publicUrl = await uploadPdfToSupabase(file, sessionId!);
 
-        const response = await fetch(`${baseURL}/api/upload`, {
-          method: 'POST',
-          body: formData,
-        });
+      // 2. Send URL to backend
+      const response = await fetchWithSession(`${baseURL}/api/upload`, {
+        method: 'POST',
+        body: JSON.stringify({ session_id: sessionId, file_url: publicUrl }),
+      });
 
-        if (!response.ok) {
-          throw new Error(`Upload failed for ${file.name}`);
-        }
-        
-        const result = await response.json();
-        console.log(`Upload successful for ${file.name}:`, result);
+      if (!response.ok) {
+        throw new Error(`Upload failed for ${file.name}`);
       }
-
-      setFiles([]); 
-      onSuccess(); // Clear files after successful upload of all files
+      
+      await response.json();
+      setFiles([]);
+      onSuccess();
     } catch (error) {
       console.error('Failed to upload files:', error);
       // Maybe show an error message
@@ -60,6 +64,7 @@ const FileUploadCard = ({ onSuccess }: { onSuccess: () => void }) => {
 
   return (
     <div className="w-full max-w-2xl mx-auto">
+      <PixelLoader isLoading={isUploading} text="UPLOADING & PROCESSING..." />
       <div
         {...getRootProps()}
         className={`relative rounded-2xl border-2 border-dashed p-12 text-center transition-colors duration-300 ${
@@ -70,10 +75,10 @@ const FileUploadCard = ({ onSuccess }: { onSuccess: () => void }) => {
         <div className="flex flex-col items-center justify-center space-y-4">
           <UploadCloud className="h-16 w-16 text-muted-foreground" />
           <p className="text-lg font-semibold" style={{fontFamily: 'var(--font-geist-sans)'}}>
-            {isDragActive ? 'Drop the files here...' : "Drag 'n' drop some files here, or click to select files"}
+            {isDragActive ? 'Drop the PDF here...' : "Drag 'n' drop a PDF here, or click to select a file"}
           </p>
           <p className="text-sm text-muted-foreground" style={{fontFamily: 'var(--font-geist-sans)'}}>
-            PDF, DOCX, TXT supported
+            Only .pdf files are supported.
           </p>
         </div>
       </div>
@@ -85,7 +90,7 @@ const FileUploadCard = ({ onSuccess }: { onSuccess: () => void }) => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
           >
-            <h3 className="font-sans text-lg font-bold">Selected Files:</h3>
+            <h3 className="font-sans text-lg font-bold">Selected File:</h3>
             <ul className="mt-4 space-y-2">
               <AnimatePresence>
                 {files.map(file => (
@@ -113,7 +118,7 @@ const FileUploadCard = ({ onSuccess }: { onSuccess: () => void }) => {
               className="mt-6 w-full rounded-full"
               size="lg"
             >
-              {isUploading ? 'Uploading...' : `Upload ${files.length} File(s)`}
+              {isUploading ? 'Uploading...' : `Upload 1 File`}
             </Button>
           </motion.div>
         )}

@@ -1,6 +1,7 @@
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Query
+from fastapi import APIRouter, Form, HTTPException, Query, Body
+from pydantic import BaseModel
 from app.services.rag_service import (
-    process_pdf,
+    process_pdf_from_url,
     answer_query,
     reset_session,
     clear_embeddings,
@@ -26,15 +27,13 @@ async def delete_embeddings_endpoint(
     await clear_embeddings(session_id=session_id, before=before)
     return {"message": "Embeddings deleted successfully."}
 
+class UploadRequest(BaseModel):
+    session_id: str
+    file_url: str
 
 @router.post("/upload")
-async def upload_pdf(
-    session_id: str = Form(...),
-    file: UploadFile = File(...)
-):
-    if not file.filename:
-        raise HTTPException(status_code=400, detail="No file uploaded.")
-    return await process_pdf(file, session_id)
+async def upload_pdf(req: UploadRequest):
+    return await process_pdf_from_url(req.file_url, req.session_id)
 
 @router.post("/chat")
 async def chat(
@@ -49,4 +48,3 @@ async def reset(
     session_id: str = Form(...)
 ):
     return await reset_session(session_id)
-

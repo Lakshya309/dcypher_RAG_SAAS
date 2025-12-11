@@ -2,6 +2,7 @@ fastapi
 uvicorn[standard]
 python-multipart
 python-dotenv
+requests
 
 pypdf
 
@@ -13,3 +14,4 @@ google-generativeai
 
 psycopg2-binary
 pgvector
+supabase
