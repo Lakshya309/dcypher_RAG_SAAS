@@ -6,6 +6,9 @@ import { v4 as uuidv4 } from 'uuid';
 // You should store these in your .env.local file and use process.env
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+console.log("URL:", process.env.NEXT_PUBLIC_SUPABASE_URL);
+console.log("ANON KEY:", process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+
 
 if (!supabaseUrl || !supabaseAnonKey) {
   console.warn(
@@ -31,7 +34,7 @@ export async function uploadPdfToSupabase(file: File, sessionId: string): Promis
 
   // 2. Generate a unique file name and path including session_id
   const fileName = `${uuidv4()}.pdf`;
-  const filePath = `pdfs/${sessionId}/${fileName}`;
+  const filePath = `${sessionId}/${fileName}`;
 
   // 3. Upload the file
   const { error } = await supabase.storage.from('pdfs').upload(filePath, file);
@@ -59,7 +62,7 @@ export async function uploadPdfToSupabase(file: File, sessionId: string): Promis
  * @throws An error if the file URL cannot be retrieved.
  */
 export function getPdfFromSupabase(fileName: string): string {
-  const { data } = supabase.storage.from('pdfs').getPublicUrl(`pdfs/${fileName}`);
+  const { data } = supabase.storage.from('pdfs').getPublicUrl(fileName);
 
   if (!data.publicUrl) {
     throw new Error('Failed to get public URL for the specified PDF.');
